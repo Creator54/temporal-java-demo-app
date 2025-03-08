@@ -1,11 +1,12 @@
 # Getting Started with Temporal Java Application
 
-A minimal Temporal application demonstrating workflow orchestration with a simple Hello World example. This project shows how to set up a basic Temporal workflow that greets a user.
+A minimal Temporal application demonstrating workflow orchestration with a simple Hello World example. This project shows how to set up a basic Temporal workflow that greets a user, with OpenTelemetry integration for metrics and tracing.
 
 ## Stack
 
 * Java 8+
 * [Temporal SDK](https://github.com/temporalio/sdk-java) for workflow orchestration
+* [OpenTelemetry](https://opentelemetry.io/) for metrics and tracing
 * Maven for dependency management
 * SLF4J for logging
 
@@ -14,7 +15,9 @@ A minimal Temporal application demonstrating workflow orchestration with a simpl
 ```
 src/main/java/helloworld/
 ├── config/
-│   └── TemporalConfig.java           # Temporal client configuration
+│   ├── TemporalConfig.java           # Temporal client configuration
+│   ├── SignozMetricsUtils.java       # OpenTelemetry metrics configuration
+│   └── SignozTracingUtils.java       # OpenTelemetry tracing configuration
 ├── workflows/
 │   ├── HelloWorldWorkflow.java       # Workflow interface definition
 │   └── impl/
@@ -31,6 +34,7 @@ Before you begin, ensure you have:
 * JDK 8+ installed
 * Maven installed
 * [Temporal CLI](https://github.com/temporalio/cli) installed for running Temporal Server
+* (Optional) [SigNoz](https://signoz.io/) or another OpenTelemetry collector for metrics and traces
 
 ## Quick Start
 
@@ -55,13 +59,19 @@ Verify the server is running:
 temporal operator cluster health
 ```
 
-### 3. Build the Project
+### 3. (Optional) Start SigNoz or OpenTelemetry Collector
+
+If you want to collect metrics and traces, you'll need a running instance of SigNoz or another OpenTelemetry collector. The default configuration expects the collector to be running at `http://localhost:4317`.
+
+For SigNoz, follow their [installation guide](https://signoz.io/docs/install/).
+
+### 4. Build the Project
 
 ```bash
 mvn clean package
 ```
 
-### 4. Run the Application
+### 5. Run the Application
 
 The application requires two components to be running:
 
@@ -80,12 +90,18 @@ mvn exec:java -Dexec.mainClass="helloworld.main.HelloWorldStarter"
 mvn exec:java -Dexec.mainClass="helloworld.main.HelloWorldStarter" -Dexec.args="YourName"
 ```
 
+Alternatively, use the provided start script that handles both components:
+```bash
+./start.sh
+```
+
 Expected Output:
 - Worker terminal: "Worker started for task queue: hello-world-task-queue"
 - Workflow terminal: 
   ```
   Hello YourName!
   Workflow ID: hello-world-workflow-{timestamp}
+  Metrics are being exported to SigNoz
   ```
 
 ## Components
@@ -174,25 +190,9 @@ public class HelloWorldStarter {
 ```
 
 ### 5. Configuration
-Temporal configuration setup ([`src/main/java/helloworld/config/TemporalConfig.java`](src/main/java/helloworld/config/TemporalConfig.java)):
-```java
-package helloworld.config;
-
-public class TemporalConfig {
-    private static final WorkflowServiceStubs service = WorkflowServiceStubs.newLocalServiceStubs();
-    private static final WorkflowClient client = WorkflowClient.newInstance(service);
-
-    public static final String TASK_QUEUE_NAME = "hello-world-task-queue";
-
-    public static WorkflowClient getWorkflowClient() {
-        return client;
-    }
-
-    public static WorkflowServiceStubs getService() {
-        return service;
-    }
-}
-```
+- Temporal configuration ([`src/main/java/helloworld/config/TemporalConfig.java`](src/main/java/helloworld/config/TemporalConfig.java))
+- OpenTelemetry metrics ([`src/main/java/helloworld/config/SignozMetricsUtils.java`](src/main/java/helloworld/config/SignozMetricsUtils.java))
+- OpenTelemetry tracing ([`src/main/java/helloworld/config/SignozTracingUtils.java`](src/main/java/helloworld/config/SignozTracingUtils.java))
 
 ## Configuration Details
 
@@ -200,9 +200,10 @@ The application supports both local and cloud deployments through environment va
 
 ### Local Development (Default)
 No environment variables needed. The application will use:
-- Server Address: localhost:7233
+- Temporal Server: localhost:7233
 - Namespace: "default"
 - Task Queue: "hello-world-task-queue"
+- OpenTelemetry Endpoint: http://localhost:4317
 
 ### Temporal Cloud Configuration
 Set the following environment variables:
@@ -217,6 +218,20 @@ export TEMPORAL_KEY_PATH=/path/to/client.key
 export TEMPORAL_TASK_QUEUE=custom-task-queue  # Defaults to "hello-world-task-queue"
 ```
 
+### OpenTelemetry Configuration
+Set the following environment variables to customize telemetry:
+```bash
+# OpenTelemetry Endpoint (default: http://localhost:4317)
+export OTEL_EXPORTER_OTLP_ENDPOINT="http://your-collector:4317"
+
+# Service Information
+export OTEL_SERVICE_NAME="your-service-name"
+export OTEL_RESOURCE_ATTRIBUTES="service.name=${OTEL_SERVICE_NAME},environment=production"
+
+# Protocol Configuration
+export OTEL_EXPORTER_OTLP_PROTOCOL=grpc
+```
+
 ### Environment Variables Reference
 | Variable | Description | Default |
 |----------|-------------|---------|
@@ -225,13 +240,16 @@ export TEMPORAL_TASK_QUEUE=custom-task-queue  # Defaults to "hello-world-task-qu
 | `TEMPORAL_TASK_QUEUE` | Task queue name | hello-world-task-queue |
 | `TEMPORAL_CERT_PATH` | Path to client certificate (for Cloud) | - |
 | `TEMPORAL_KEY_PATH` | Path to client private key (for Cloud) | - |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | OpenTelemetry collector endpoint | http://localhost:4317 |
+| `OTEL_SERVICE_NAME` | Service name for telemetry | temporal-hello-world |
+| `OTEL_RESOURCE_ATTRIBUTES` | Additional resource attributes | - |
 
 ### Example Usage
 
 1. **Local Development**:
 ```bash
 # No environment variables needed
-mvn exec:java -Dexec.mainClass="helloworld.workers.HelloWorldWorker"
+./start.sh
 ```
 
 2. **Temporal Cloud**:
@@ -243,8 +261,37 @@ export TEMPORAL_CERT_PATH=/path/to/client.pem
 export TEMPORAL_KEY_PATH=/path/to/client.key
 
 # Run the application
-mvn exec:java -Dexec.mainClass="helloworld.workers.HelloWorldWorker"
+./start.sh
 ```
+
+3. **Custom OpenTelemetry Configuration**:
+```bash
+# Set OpenTelemetry variables
+export OTEL_EXPORTER_OTLP_ENDPOINT="http://your-collector:4317"
+export OTEL_SERVICE_NAME="custom-service-name"
+export OTEL_RESOURCE_ATTRIBUTES="service.name=${OTEL_SERVICE_NAME},environment=staging"
+
+# Run the application
+./start.sh
+```
+
+## Monitoring and Observability
+
+### Temporal Web UI
+- Access the Temporal Web UI at http://localhost:8080
+- View workflow executions, history, and status
+- Debug workflow issues
+
+### Metrics and Tracing (with SigNoz)
+- Access the SigNoz UI (default: http://localhost:3301)
+- View metrics:
+  - Workflow execution metrics
+  - Worker metrics
+  - Task queue metrics
+- View traces:
+  - Workflow execution traces
+  - Activity traces
+  - End-to-end request flows
 
 ## Troubleshooting
 
@@ -263,9 +310,16 @@ mvn exec:java -Dexec.mainClass="helloworld.workers.HelloWorldWorker"
    - Verify workflow ID in the UI matches the printed ID
    - Look for any error messages in the starter output
 
+4. **OpenTelemetry Issues**
+   - Verify the collector is running and accessible
+   - Check collector logs for connection issues
+   - Ensure the OTLP endpoint is correctly configured
+   - Look for any error messages in the application logs
+
 ## Additional Resources
 
 * [Temporal Documentation](https://docs.temporal.io/)
 * [Temporal Java SDK](https://github.com/temporalio/sdk-java)
 * [Temporal Java Samples](https://github.com/temporalio/samples-java)
-* [Temporal CLI Repository](https://github.com/temporalio/cli) 
+* [OpenTelemetry Documentation](https://opentelemetry.io/docs/)
+* [SigNoz Documentation](https://signoz.io/docs/) 

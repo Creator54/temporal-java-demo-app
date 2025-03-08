@@ -23,21 +23,73 @@ public class TemporalConfig {
         static final String KEY_PATH = "TEMPORAL_KEY_PATH";
     }
 
-    private static final WorkflowServiceStubs service;
-    private static final WorkflowClient client;
+    private static WorkflowServiceStubs service;
+    private static WorkflowClient client;
 
-    static {
+    public static WorkflowClient getWorkflowClient() {
+        if (client == null) {
+            initializeDefault();
+        }
+        return client;
+    }
+
+    public static WorkflowClient getWorkflowClient(WorkflowServiceStubsOptions stubOptions) {
+        return getWorkflowClient(stubOptions, null);
+    }
+
+    public static WorkflowClient getWorkflowClient(WorkflowServiceStubsOptions stubOptions, WorkflowClientOptions clientOptions) {
+        initializeWithOptions(stubOptions, clientOptions);
+        return client;
+    }
+
+    public static WorkflowServiceStubs getService() {
+        if (service == null) {
+            initializeDefault();
+        }
+        return service;
+    }
+
+    private static synchronized void initializeDefault() {
+        if (service != null && client != null) {
+            return;
+        }
         try {
-            service = initializeWorkflowServiceStubs();
-            client = initializeWorkflowClient();
+            service = initializeWorkflowServiceStubs(WorkflowServiceStubsOptions.newBuilder());
+            client = initializeWorkflowClient(null);
         } catch (Exception e) {
             throw new RuntimeException("Failed to initialize Temporal configuration", e);
         }
     }
 
-    private static WorkflowServiceStubs initializeWorkflowServiceStubs() {
-        WorkflowServiceStubsOptions.Builder options = WorkflowServiceStubsOptions.newBuilder();
-        
+    private static synchronized void initializeWithOptions(
+            WorkflowServiceStubsOptions stubOptions,
+            WorkflowClientOptions clientOptions) {
+        try {
+            // Create a new builder with the provided options
+            WorkflowServiceStubsOptions.Builder builder = WorkflowServiceStubsOptions.newBuilder()
+                .setMetricsScope(stubOptions.getMetricsScope())
+                .setEnableKeepAlive(stubOptions.getEnableKeepAlive())
+                .setKeepAliveTime(stubOptions.getKeepAliveTime())
+                .setKeepAliveTimeout(stubOptions.getKeepAliveTimeout())
+                .setKeepAlivePermitWithoutStream(stubOptions.getKeepAlivePermitWithoutStream());
+
+            // Configure endpoint and TLS
+            configureEndpoint(builder);
+            
+            // Initialize services with the combined options
+            service = WorkflowServiceStubs.newServiceStubs(builder.build());
+            client = initializeWorkflowClient(clientOptions);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to initialize Temporal configuration", e);
+        }
+    }
+
+    private static WorkflowServiceStubs initializeWorkflowServiceStubs(WorkflowServiceStubsOptions.Builder options) {
+        configureEndpoint(options);
+        return WorkflowServiceStubs.newServiceStubs(options.build());
+    }
+
+    private static void configureEndpoint(WorkflowServiceStubsOptions.Builder options) {
         String targetEndpoint = System.getenv(EnvVars.HOST);
         if (targetEndpoint != null) {
             options.setTarget(targetEndpoint);
@@ -45,8 +97,6 @@ public class TemporalConfig {
         } else {
             options.setTarget(Defaults.TARGET);
         }
-
-        return WorkflowServiceStubs.newServiceStubs(options.build());
     }
 
     private static void configureTls(WorkflowServiceStubsOptions.Builder options) {
@@ -66,12 +116,24 @@ public class TemporalConfig {
         }
     }
 
-    private static WorkflowClient initializeWorkflowClient() {
+    private static WorkflowClient initializeWorkflowClient(WorkflowClientOptions options) {
         String namespace = getEnvOrDefault(EnvVars.NAMESPACE, Defaults.NAMESPACE);
-        return WorkflowClient.newInstance(service,
-            WorkflowClientOptions.newBuilder()
-                .setNamespace(namespace)
-                .build());
+        WorkflowClientOptions.Builder builder = WorkflowClientOptions.newBuilder()
+            .setNamespace(namespace);
+
+        if (options != null) {
+            if (options.getInterceptors() != null) {
+                builder.setInterceptors(options.getInterceptors());
+            }
+            if (options.getIdentity() != null) {
+                builder.setIdentity(options.getIdentity());
+            }
+            if (options.getDataConverter() != null) {
+                builder.setDataConverter(options.getDataConverter());
+            }
+        }
+
+        return WorkflowClient.newInstance(service, builder.build());
     }
 
     private static String getEnvOrDefault(String envVar, String defaultValue) {
@@ -81,14 +143,6 @@ public class TemporalConfig {
 
     public static String getTaskQueue() {
         return getEnvOrDefault(EnvVars.TASK_QUEUE, Defaults.TASK_QUEUE);
-    }
-
-    public static WorkflowClient getWorkflowClient() {
-        return client;
-    }
-
-    public static WorkflowServiceStubs getService() {
-        return service;
     }
 
     private TemporalConfig() {

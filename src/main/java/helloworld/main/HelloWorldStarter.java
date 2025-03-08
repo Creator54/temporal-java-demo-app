@@ -1,10 +1,14 @@
 package helloworld.main;
 
 import helloworld.config.TemporalConfig;
+import helloworld.config.SignozMetricsUtils;
+import helloworld.config.SignozTracingUtils;
 import helloworld.workflows.HelloWorldWorkflow;
 import io.temporal.client.WorkflowClient;
+import io.temporal.client.WorkflowClientOptions;
 import io.temporal.client.WorkflowOptions;
 import io.temporal.common.RetryOptions;
+import io.temporal.serviceclient.WorkflowServiceStubsOptions;
 import java.time.Duration;
 import java.util.UUID;
 
@@ -12,7 +16,18 @@ public class HelloWorldStarter {
     private final WorkflowClient client;
 
     public HelloWorldStarter() {
-        this.client = TemporalConfig.getWorkflowClient();
+        // Configure service stubs with metrics
+        WorkflowServiceStubsOptions stubOptions = WorkflowServiceStubsOptions.newBuilder()
+            .setMetricsScope(SignozMetricsUtils.getSignozMetricsScope())
+            .build();
+
+        // Configure client with OpenTelemetry tracing
+        WorkflowClientOptions clientOptions = WorkflowClientOptions.newBuilder()
+            .setInterceptors(SignozTracingUtils.getClientInterceptor())
+            .build();
+
+        // Create client with configured options
+        this.client = TemporalConfig.getWorkflowClient(stubOptions, clientOptions);
     }
 
     public void runWorkflow(String name) {
@@ -37,6 +52,7 @@ public class HelloWorldStarter {
             System.out.println("Workflow execution completed:");
             System.out.println("Result: " + result);
             System.out.println("Workflow ID: " + options.getWorkflowId());
+            System.out.println("Metrics and traces are being exported to SigNoz");
         } catch (Exception e) {
             System.err.println("Error executing workflow: " + e.getMessage());
             throw new RuntimeException("Failed to execute workflow", e);

@@ -30,6 +30,15 @@ check_port() {
     return 1
 }
 
+# OpenTelemetry Configuration
+export OTEL_EXPORTER_OTLP_ENDPOINT="http://localhost:4317"
+export OTEL_SERVICE_NAME="temporal-hello-world"
+export OTEL_RESOURCE_ATTRIBUTES="service.name=${OTEL_SERVICE_NAME},environment=development"
+export OTEL_METRICS_EXPORTER=otlp
+export OTEL_TRACES_EXPORTER=otlp
+export OTEL_LOGS_EXPORTER=none
+export OTEL_EXPORTER_OTLP_PROTOCOL=grpc
+
 echo "Starting application..."
 
 # Check Temporal Server
@@ -37,6 +46,12 @@ echo "Checking Temporal Server..."
 if ! check_port localhost 7233 3 2; then
     echo "ERROR: Temporal Server is not running. Please start it first."
     exit 1
+fi
+
+# Check SigNoz/OpenTelemetry Collector
+echo "Checking SigNoz/OpenTelemetry Collector..."
+if ! check_port localhost 4317 3 2; then
+    echo "WARNING: SigNoz/OpenTelemetry Collector is not running. Metrics and traces will not be exported."
 fi
 
 # Clean existing processes
