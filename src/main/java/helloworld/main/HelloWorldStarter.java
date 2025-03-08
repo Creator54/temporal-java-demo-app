@@ -15,6 +15,9 @@ public class HelloWorldStarter {
     private final WorkflowClient client;
 
     public HelloWorldStarter() {
+        // Initialize OpenTelemetry
+        SignozTelemetryUtils.initializeTelemetry();
+
         // Configure service stubs with OpenTelemetry
         WorkflowServiceStubsOptions stubOptions = WorkflowServiceStubsOptions.newBuilder()
             .setMetricsScope(SignozTelemetryUtils.getMetricsScope())

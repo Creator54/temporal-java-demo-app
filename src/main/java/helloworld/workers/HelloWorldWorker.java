@@ -17,6 +17,9 @@ public class HelloWorldWorker implements AutoCloseable {
     private volatile boolean isShuttingDown = false;
 
     public HelloWorldWorker() {
+        // Initialize OpenTelemetry
+        SignozTelemetryUtils.initializeTelemetry();
+
         // Configure service stubs with OpenTelemetry
         WorkflowServiceStubsOptions stubOptions = WorkflowServiceStubsOptions.newBuilder()
             .setMetricsScope(SignozTelemetryUtils.getMetricsScope())
