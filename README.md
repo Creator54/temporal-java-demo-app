@@ -7,8 +7,6 @@ A minimal Temporal application demonstrating workflow orchestration with OpenTel
 - [Telemetry Integration Guide](docs/telemetry.md)
   - [Metrics Guide](docs/metrics.md)
   - [Tracing Guide](docs/tracing.md)
-  - [Configuration](docs/configuration.md)
-  - [Troubleshooting](docs/troubleshooting.md)
 
 ## Quick Start
 
