@@ -10,12 +10,41 @@ import io.temporal.serviceclient.WorkflowServiceStubsOptions;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * Worker process that hosts and executes the Hello World workflow.
+ * This class provides:
+ * 1. Worker initialization with telemetry
+ * 2. Workflow implementation registration
+ * 3. Graceful shutdown handling
+ * 
+ * The worker is configured with:
+ * - OpenTelemetry integration for metrics and tracing
+ * - Automatic workflow registration
+ * - Graceful shutdown with timeout
+ * - Error handling and logging
+ * 
+ * Usage:
+ * ```java
+ * // Start worker
+ * try (HelloWorldWorker worker = new HelloWorldWorker()) {
+ *     worker.start();
+ * }
+ * ```
+ */
 public class HelloWorldWorker implements AutoCloseable {
     private final WorkerFactory factory;
     private final Worker worker;
     private final CountDownLatch shutdownLatch;
     private volatile boolean isShuttingDown = false;
 
+    /**
+     * Creates a new worker with telemetry enabled.
+     * Initializes:
+     * - OpenTelemetry
+     * - Worker factory with interceptors
+     * - Worker instance
+     * - Workflow registration
+     */
     public HelloWorldWorker() {
         // Initialize OpenTelemetry
         SignozTelemetryUtils.initializeTelemetry();
@@ -41,6 +70,13 @@ public class HelloWorldWorker implements AutoCloseable {
         this.shutdownLatch = new CountDownLatch(1);
     }
 
+    /**
+     * Starts the worker and keeps it running.
+     * Sets up:
+     * - Shutdown hook for graceful termination
+     * - Error handling
+     * - Status logging
+     */
     public void start() {
         try {
             factory.start();
@@ -64,6 +100,13 @@ public class HelloWorldWorker implements AutoCloseable {
         }
     }
 
+    /**
+     * Performs graceful shutdown of the worker.
+     * Shutdown steps:
+     * 1. Attempt graceful shutdown with timeout
+     * 2. Force shutdown if graceful fails
+     * 3. Clean up resources
+     */
     @Override
     public void close() {
         if (isShuttingDown) {
@@ -104,6 +147,12 @@ public class HelloWorldWorker implements AutoCloseable {
         }
     }
 
+    /**
+     * Main entry point for the worker process.
+     * Creates and starts a worker instance.
+     * 
+     * @param args Command line arguments (not used)
+     */
     public static void main(String[] args) {
         try (HelloWorldWorker worker = new HelloWorldWorker()) {
             worker.start();

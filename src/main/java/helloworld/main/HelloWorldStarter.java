@@ -11,9 +11,36 @@ import io.temporal.serviceclient.WorkflowServiceStubsOptions;
 import java.time.Duration;
 import java.util.UUID;
 
+/**
+ * Application entry point for starting Hello World workflows.
+ * This class provides:
+ * 1. Workflow client initialization with telemetry
+ * 2. Workflow execution with retry options
+ * 3. Result handling and logging
+ * 
+ * The starter is configured with:
+ * - OpenTelemetry integration for metrics and tracing
+ * - Automatic retry policy for workflow execution
+ * - Unique workflow ID generation
+ * - Error handling and logging
+ * 
+ * Usage:
+ * ```java
+ * // Start workflow
+ * HelloWorldStarter starter = new HelloWorldStarter();
+ * starter.runWorkflow("YourName");
+ * ```
+ */
 public class HelloWorldStarter {
     private final WorkflowClient client;
 
+    /**
+     * Creates a new workflow starter with telemetry enabled.
+     * Initializes:
+     * - OpenTelemetry
+     * - Workflow client with interceptors
+     * - Service stubs with metrics
+     */
     public HelloWorldStarter() {
         // Initialize OpenTelemetry
         SignozTelemetryUtils.initializeTelemetry();
@@ -32,6 +59,16 @@ public class HelloWorldStarter {
         this.client = TemporalConfig.getWorkflowClient(stubOptions, clientOptions);
     }
 
+    /**
+     * Executes the Hello World workflow with the given name.
+     * Sets up:
+     * - Workflow options with retry policy
+     * - Unique workflow ID
+     * - Result logging
+     * 
+     * @param name Name to pass to the workflow
+     * @throws RuntimeException if workflow execution fails
+     */
     public void runWorkflow(String name) {
         try {
             // Create workflow options with retry policy
@@ -61,6 +98,12 @@ public class HelloWorldStarter {
         }
     }
 
+    /**
+     * Main entry point for the workflow starter.
+     * Creates a starter instance and runs the workflow.
+     * 
+     * @param args Optional name to use in greeting (defaults to "Temporal")
+     */
     public static void main(String[] args) {
         try {
             HelloWorldStarter starter = new HelloWorldStarter();

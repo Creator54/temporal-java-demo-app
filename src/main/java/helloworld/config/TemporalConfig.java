@@ -6,6 +6,30 @@ import io.temporal.serviceclient.WorkflowServiceStubs;
 import io.temporal.serviceclient.WorkflowServiceStubsOptions;
 import java.io.File;
 
+/**
+ * Core configuration for Temporal client and service connections.
+ * This class provides:
+ * 1. Workflow client initialization and management
+ * 2. Service connection configuration
+ * 3. Environment-based setup for cloud deployment
+ * 4. TLS configuration for secure connections
+ * 
+ * The configuration supports both local development and cloud deployment:
+ * - Local: Uses default localhost settings
+ * - Cloud: Uses environment variables for endpoint and credentials
+ * 
+ * Usage:
+ * ```java
+ * // Basic client creation
+ * WorkflowClient client = TemporalConfig.getWorkflowClient();
+ * 
+ * // Client with custom options
+ * WorkflowClient client = TemporalConfig.getWorkflowClient(
+ *     stubOptions,
+ *     clientOptions
+ * );
+ * ```
+ */
 public class TemporalConfig {
     // Default configuration values
     private static final class Defaults {
@@ -26,6 +50,12 @@ public class TemporalConfig {
     private static WorkflowServiceStubs service;
     private static WorkflowClient client;
 
+    /**
+     * Gets a workflow client with default configuration.
+     * Thread-safe and creates client if none exists.
+     * 
+     * @return WorkflowClient instance
+     */
     public static WorkflowClient getWorkflowClient() {
         if (client == null) {
             initializeDefault();
@@ -33,15 +63,34 @@ public class TemporalConfig {
         return client;
     }
 
+    /**
+     * Gets a workflow client with custom service options.
+     * 
+     * @param stubOptions Custom service stub options
+     * @return WorkflowClient instance
+     */
     public static WorkflowClient getWorkflowClient(WorkflowServiceStubsOptions stubOptions) {
         return getWorkflowClient(stubOptions, null);
     }
 
+    /**
+     * Gets a workflow client with custom service and client options.
+     * 
+     * @param stubOptions Custom service stub options
+     * @param clientOptions Custom client options
+     * @return WorkflowClient instance
+     */
     public static WorkflowClient getWorkflowClient(WorkflowServiceStubsOptions stubOptions, WorkflowClientOptions clientOptions) {
         initializeWithOptions(stubOptions, clientOptions);
         return client;
     }
 
+    /**
+     * Gets the workflow service stubs.
+     * Thread-safe and creates service if none exists.
+     * 
+     * @return WorkflowServiceStubs instance
+     */
     public static WorkflowServiceStubs getService() {
         if (service == null) {
             initializeDefault();
@@ -49,6 +98,10 @@ public class TemporalConfig {
         return service;
     }
 
+    /**
+     * Initializes the service and client with default configuration.
+     * Thread-safe and idempotent.
+     */
     private static synchronized void initializeDefault() {
         if (service != null && client != null) {
             return;
@@ -61,6 +114,12 @@ public class TemporalConfig {
         }
     }
 
+    /**
+     * Initializes the service and client with custom options.
+     * 
+     * @param stubOptions Custom service stub options
+     * @param clientOptions Custom client options
+     */
     private static synchronized void initializeWithOptions(
             WorkflowServiceStubsOptions stubOptions,
             WorkflowClientOptions clientOptions) {
@@ -84,11 +143,23 @@ public class TemporalConfig {
         }
     }
 
+    /**
+     * Creates workflow service stubs with the given options.
+     * 
+     * @param options Service stub options builder
+     * @return Configured WorkflowServiceStubs
+     */
     private static WorkflowServiceStubs initializeWorkflowServiceStubs(WorkflowServiceStubsOptions.Builder options) {
         configureEndpoint(options);
         return WorkflowServiceStubs.newServiceStubs(options.build());
     }
 
+    /**
+     * Configures the service endpoint and TLS settings.
+     * Uses environment variables if available, defaults otherwise.
+     * 
+     * @param options Service stub options builder to configure
+     */
     private static void configureEndpoint(WorkflowServiceStubsOptions.Builder options) {
         String targetEndpoint = System.getenv(EnvVars.HOST);
         if (targetEndpoint != null) {
@@ -99,6 +170,12 @@ public class TemporalConfig {
         }
     }
 
+    /**
+     * Configures TLS for secure connections.
+     * Uses certificate and key files specified in environment variables.
+     * 
+     * @param options Service stub options builder to configure
+     */
     private static void configureTls(WorkflowServiceStubsOptions.Builder options) {
         String certPath = System.getenv(EnvVars.CERT_PATH);
         String keyPath = System.getenv(EnvVars.KEY_PATH);
@@ -116,6 +193,12 @@ public class TemporalConfig {
         }
     }
 
+    /**
+     * Creates a workflow client with the given options.
+     * 
+     * @param options Custom client options (optional)
+     * @return Configured WorkflowClient
+     */
     private static WorkflowClient initializeWorkflowClient(WorkflowClientOptions options) {
         String namespace = getEnvOrDefault(EnvVars.NAMESPACE, Defaults.NAMESPACE);
         WorkflowClientOptions.Builder builder = WorkflowClientOptions.newBuilder()
@@ -136,16 +219,28 @@ public class TemporalConfig {
         return WorkflowClient.newInstance(service, builder.build());
     }
 
+    /**
+     * Gets a value from environment variables or returns default.
+     * 
+     * @param envVar Environment variable name
+     * @param defaultValue Default value if not found
+     * @return Value from environment or default
+     */
     private static String getEnvOrDefault(String envVar, String defaultValue) {
         String value = System.getenv(envVar);
         return value != null ? value : defaultValue;
     }
 
+    /**
+     * Gets the task queue name from environment or default.
+     * 
+     * @return Task queue name to use
+     */
     public static String getTaskQueue() {
         return getEnvOrDefault(EnvVars.TASK_QUEUE, Defaults.TASK_QUEUE);
     }
 
     private TemporalConfig() {
-        // Prevent instantiation
+        // Prevent instantiation - use static methods
     }
 } 

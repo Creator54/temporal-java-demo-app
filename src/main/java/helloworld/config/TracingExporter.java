@@ -13,11 +13,44 @@ import io.opentelemetry.opentracingshim.OpenTracingShim;
 import java.util.logging.Logger;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * Configures and manages OpenTelemetry tracing export for Temporal.
+ * This class provides:
+ * 1. OTLP trace exporter configuration
+ * 2. OpenTracing compatibility layer
+ * 3. Temporal worker and client interceptors
+ * 4. Batch span processing
+ * 
+ * The tracing pipeline is configured to:
+ * - Export traces via OTLP/gRPC protocol
+ * - Use batch processing for efficient export
+ * - Support OpenTracing for Temporal compatibility
+ * - Include standard resource attributes
+ * 
+ * Usage:
+ * ```java
+ * // Configure worker with tracing
+ * WorkerFactoryOptions options = WorkerFactoryOptions.newBuilder()
+ *     .setWorkerInterceptors(TracingExporter.getWorkerInterceptor())
+ *     .build();
+ * 
+ * // Configure client with tracing
+ * WorkflowClientOptions clientOptions = WorkflowClientOptions.newBuilder()
+ *     .setInterceptors(TracingExporter.getClientInterceptor())
+ *     .build();
+ * ```
+ */
 public class TracingExporter {
     private static final Logger logger = Logger.getLogger(TracingExporter.class.getName());
     private static OpenTracingOptions openTracingOptions;
     private static BatchSpanProcessor spanProcessor;
 
+    /**
+     * Gets OpenTracing options configured for Temporal.
+     * Thread-safe and creates options if none exist.
+     * 
+     * @return OpenTracingOptions for Temporal integration
+     */
     public static synchronized OpenTracingOptions getOpenTracingOptions() {
         if (openTracingOptions == null) {
             openTracingOptions = OpenTracingOptions.newBuilder()
@@ -28,14 +61,33 @@ public class TracingExporter {
         return openTracingOptions;
     }
 
+    /**
+     * Creates a worker interceptor for tracing Temporal workflows.
+     * 
+     * @return WorkerInterceptor configured with OpenTracing
+     */
     public static WorkerInterceptor getWorkerInterceptor() {
         return new OpenTracingWorkerInterceptor(getOpenTracingOptions());
     }
 
+    /**
+     * Creates a client interceptor for tracing Temporal workflow clients.
+     * 
+     * @return WorkflowClientInterceptor configured with OpenTracing
+     */
     public static WorkflowClientInterceptor getClientInterceptor() {
         return new OpenTracingClientInterceptor(getOpenTracingOptions());
     }
 
+    /**
+     * Creates and configures the OpenTelemetry tracer provider.
+     * Sets up:
+     * - OTLP gRPC exporter
+     * - Batch span processor
+     * - Resource attributes
+     * 
+     * @return Configured SdkTracerProvider
+     */
     public static SdkTracerProvider createTracerProvider() {
         String endpoint = OpenTelemetryConfig.getEndpoint();
 
@@ -46,7 +98,7 @@ public class TracingExporter {
             .setTimeout(java.time.Duration.ofSeconds(30))
             .build();
 
-        // Create BatchSpanProcessor
+        // Create BatchSpanProcessor with optimized settings
         spanProcessor = BatchSpanProcessor.builder(spanExporter)
             .setScheduleDelay(java.time.Duration.ofMillis(100))
             .setMaxQueueSize(2048)
@@ -60,6 +112,10 @@ public class TracingExporter {
             .build();
     }
 
+    /**
+     * Gracefully shuts down the tracing pipeline.
+     * Ensures all pending spans are exported before shutdown.
+     */
     public static void shutdown() {
         if (spanProcessor != null) {
             try {
@@ -74,6 +130,6 @@ public class TracingExporter {
     }
 
     private TracingExporter() {
-        // Prevent instantiation
+        // Prevent instantiation - use static methods
     }
 } 

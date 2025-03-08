@@ -8,11 +8,38 @@ import com.uber.m3.tally.Scope;
 import java.util.logging.Logger;
 import java.util.concurrent.TimeUnit;
 
+/**
+ * Configures and manages OpenTelemetry metrics export for Temporal.
+ * This class provides:
+ * 1. OTLP metrics exporter configuration
+ * 2. Metrics scope for Temporal client
+ * 3. Periodic metrics reader setup
+ * 
+ * The metrics pipeline is configured to:
+ * - Export metrics via OTLP/gRPC protocol
+ * - Use periodic batch export with configurable intervals
+ * - Include standard resource attributes
+ * 
+ * Usage:
+ * ```java
+ * // Get metrics scope for Temporal client
+ * Scope scope = MetricsExporter.getMetricsScope();
+ * 
+ * // Create meter provider for SDK initialization
+ * SdkMeterProvider provider = MetricsExporter.createMeterProvider();
+ * ```
+ */
 public class MetricsExporter {
     private static final Logger logger = Logger.getLogger(MetricsExporter.class.getName());
     private static Scope metricsScope;
     private static PeriodicMetricReader metricReader;
 
+    /**
+     * Gets the metrics scope for Temporal client configuration.
+     * Thread-safe and creates a NoopScope if none exists.
+     * 
+     * @return Scope instance for Temporal metrics
+     */
     public static synchronized Scope getMetricsScope() {
         if (metricsScope == null) {
             metricsScope = new NoopScope();
@@ -20,6 +47,15 @@ public class MetricsExporter {
         return metricsScope;
     }
 
+    /**
+     * Creates and configures the OpenTelemetry meter provider.
+     * Sets up:
+     * - OTLP gRPC exporter
+     * - Periodic metric reader
+     * - Resource attributes
+     * 
+     * @return Configured SdkMeterProvider
+     */
     public static SdkMeterProvider createMeterProvider() {
         String endpoint = OpenTelemetryConfig.getEndpoint();
         
@@ -30,7 +66,7 @@ public class MetricsExporter {
             .setTimeout(java.time.Duration.ofSeconds(30))
             .build();
 
-        // Create metric reader
+        // Create metric reader with 1-second interval
         metricReader = PeriodicMetricReader.builder(metricExporter)
             .setInterval(java.time.Duration.ofSeconds(1))
             .build();
@@ -42,6 +78,10 @@ public class MetricsExporter {
             .build();
     }
 
+    /**
+     * Gracefully shuts down the metrics pipeline.
+     * Ensures all pending metrics are exported before shutdown.
+     */
     public static void shutdown() {
         if (metricReader != null) {
             try {
@@ -55,6 +95,6 @@ public class MetricsExporter {
     }
 
     private MetricsExporter() {
-        // Prevent instantiation
+        // Prevent instantiation - use static methods
     }
 } 
