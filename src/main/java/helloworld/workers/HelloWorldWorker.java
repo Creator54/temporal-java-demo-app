@@ -1,8 +1,7 @@
 package helloworld.workers;
 
 import helloworld.config.TemporalConfig;
-import helloworld.config.SignozMetricsUtils;
-import helloworld.config.SignozTracingUtils;
+import helloworld.config.SignozTelemetryUtils;
 import helloworld.workflows.impl.HelloWorldWorkflowImpl;
 import io.temporal.worker.Worker;
 import io.temporal.worker.WorkerFactory;
@@ -18,14 +17,14 @@ public class HelloWorldWorker implements AutoCloseable {
     private volatile boolean isShuttingDown = false;
 
     public HelloWorldWorker() {
-        // Configure service stubs with metrics
+        // Configure service stubs with OpenTelemetry
         WorkflowServiceStubsOptions stubOptions = WorkflowServiceStubsOptions.newBuilder()
-            .setMetricsScope(SignozMetricsUtils.getSignozMetricsScope())
+            .setMetricsScope(SignozTelemetryUtils.getMetricsScope())
             .build();
 
-        // Configure worker factory with OpenTelemetry tracing
+        // Configure worker factory with OpenTelemetry interceptor
         WorkerFactoryOptions factoryOptions = WorkerFactoryOptions.newBuilder()
-            .setWorkerInterceptors(SignozTracingUtils.getWorkerInterceptor())
+            .setWorkerInterceptors(SignozTelemetryUtils.getWorkerInterceptor())
             .build();
 
         // Create client and factory with configured options

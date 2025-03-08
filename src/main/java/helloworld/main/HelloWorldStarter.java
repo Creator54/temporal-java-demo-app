@@ -1,8 +1,7 @@
 package helloworld.main;
 
 import helloworld.config.TemporalConfig;
-import helloworld.config.SignozMetricsUtils;
-import helloworld.config.SignozTracingUtils;
+import helloworld.config.SignozTelemetryUtils;
 import helloworld.workflows.HelloWorldWorkflow;
 import io.temporal.client.WorkflowClient;
 import io.temporal.client.WorkflowClientOptions;
@@ -16,14 +15,14 @@ public class HelloWorldStarter {
     private final WorkflowClient client;
 
     public HelloWorldStarter() {
-        // Configure service stubs with metrics
+        // Configure service stubs with OpenTelemetry
         WorkflowServiceStubsOptions stubOptions = WorkflowServiceStubsOptions.newBuilder()
-            .setMetricsScope(SignozMetricsUtils.getSignozMetricsScope())
+            .setMetricsScope(SignozTelemetryUtils.getMetricsScope())
             .build();
 
-        // Configure client with OpenTelemetry tracing
+        // Configure client with OpenTelemetry interceptor
         WorkflowClientOptions clientOptions = WorkflowClientOptions.newBuilder()
-            .setInterceptors(SignozTracingUtils.getClientInterceptor())
+            .setInterceptors(SignozTelemetryUtils.getClientInterceptor())
             .build();
 
         // Create client with configured options

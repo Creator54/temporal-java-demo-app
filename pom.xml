@@ -23,11 +23,6 @@
             <artifactId>temporal-sdk</artifactId>
             <version>${temporal.version}</version>
         </dependency>
-        <dependency>
-            <groupId>io.temporal</groupId>
-            <artifactId>temporal-opentracing</artifactId>
-            <version>${temporal.version}</version>
-        </dependency>
 
         <!-- OpenTelemetry Dependencies -->
         <dependency>
@@ -57,13 +52,20 @@
         </dependency>
         <dependency>
             <groupId>io.opentelemetry</groupId>
-            <artifactId>opentelemetry-opentracing-shim</artifactId>
+            <artifactId>opentelemetry-sdk-extension-autoconfigure</artifactId>
             <version>${opentelemetry.version}</version>
         </dependency>
+
+        <!-- OpenTracing Dependencies -->
         <dependency>
-            <groupId>io.opentelemetry.semconv</groupId>
-            <artifactId>opentelemetry-semconv</artifactId>
-            <version>1.21.0-alpha</version>
+            <groupId>io.temporal</groupId>
+            <artifactId>temporal-opentracing</artifactId>
+            <version>${temporal.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-opentracing-shim</artifactId>
+            <version>${opentelemetry.version}</version>
         </dependency>
 
         <!-- Logging -->
