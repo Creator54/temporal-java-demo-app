@@ -90,19 +90,40 @@ public class TracingExporter {
      */
     public static SdkTracerProvider createTracerProvider() {
         String endpoint = OpenTelemetryConfig.getEndpoint();
+        String accessToken = OpenTelemetryConfig.getAccessToken();
+        
+        // Parse the header key and value
+        String headerKey = null;
+        String headerValue = accessToken;
+        if (accessToken != null && accessToken.contains("=")) {
+            String[] parts = accessToken.split("=", 2);
+            headerKey = parts[0];
+            headerValue = parts[1];
+        }
 
         // Create OTLP trace exporter
-        OtlpGrpcSpanExporter spanExporter = OtlpGrpcSpanExporter.builder()
-            .setEndpoint(endpoint)
-            .addHeader("signoz-debug", "true")
-            .setTimeout(java.time.Duration.ofSeconds(30))
-            .build();
+        OtlpGrpcSpanExporter spanExporter;
+        if (headerKey != null && headerValue != null && !headerValue.isEmpty() && !endpoint.contains("localhost")) {
+            logger.info("Tracing header key: " + headerKey);
+            logger.info("Tracing endpoint: " + endpoint);
+            spanExporter = OtlpGrpcSpanExporter.builder()
+                .setEndpoint(endpoint)
+                .addHeader(headerKey, headerValue)
+                .setTimeout(java.time.Duration.ofSeconds(60))
+                .build();
+        } else {
+            spanExporter = OtlpGrpcSpanExporter.builder()
+                .setEndpoint(endpoint)
+                .setTimeout(java.time.Duration.ofSeconds(60))
+                .build();
+        }
 
         // Create BatchSpanProcessor with optimized settings
         spanProcessor = BatchSpanProcessor.builder(spanExporter)
-            .setScheduleDelay(java.time.Duration.ofMillis(100))
-            .setMaxQueueSize(2048)
+            .setScheduleDelay(java.time.Duration.ofSeconds(1))
+            .setMaxQueueSize(4096)
             .setMaxExportBatchSize(512)
+            .setExporterTimeout(java.time.Duration.ofSeconds(60))
             .build();
 
         // Create and return tracer provider

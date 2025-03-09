@@ -33,6 +33,7 @@ public final class OpenTelemetryConfig {
 
     // Standard OpenTelemetry resource attribute keys for custom attribute creation
     public static final AttributeKey<String> SERVICE_NAME = AttributeKey.stringKey("service.name");
+    public static final AttributeKey<String> ACCESS_TOKEN = AttributeKey.stringKey("signoz-access-token");
     public static final AttributeKey<String> SERVICE_NAMESPACE = AttributeKey.stringKey("service.namespace");
     public static final AttributeKey<String> DEPLOYMENT_ENVIRONMENT = AttributeKey.stringKey("deployment.environment");
 
@@ -40,6 +41,7 @@ public final class OpenTelemetryConfig {
     private static final String ENV_OTEL_ENDPOINT = "OTEL_EXPORTER_OTLP_ENDPOINT";  // Collector endpoint
     private static final String ENV_ENVIRONMENT = "OTEL_ENVIRONMENT";               // Deployment environment
     private static final String ENV_RESOURCE_ATTRIBUTES = "OTEL_RESOURCE_ATTRIBUTES"; // Resource attributes
+    private static final String ENV_SIGNOZ_ACCESS_TOKEN = "OTEL_EXPORTER_OTLP_HEADERS"; // SigNoz access token
 
     // Global SDK instance - initialized by SignozTelemetryUtils
     private static volatile OpenTelemetry openTelemetry;
@@ -117,6 +119,10 @@ public final class OpenTelemetryConfig {
      */
     public static String getEndpoint() {
         return System.getenv().getOrDefault(ENV_OTEL_ENDPOINT, DEFAULT_SIGNOZ_ENDPOINT);
+    }
+
+    public static String getAccessToken() {
+        return System.getenv().get(ENV_SIGNOZ_ACCESS_TOKEN);
     }
 
     /**

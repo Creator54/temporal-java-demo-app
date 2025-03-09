@@ -58,17 +58,37 @@ public class MetricsExporter {
      */
     public static SdkMeterProvider createMeterProvider() {
         String endpoint = OpenTelemetryConfig.getEndpoint();
+        String accessToken = OpenTelemetryConfig.getAccessToken();
         
-        // Create OTLP metric exporter
-        OtlpGrpcMetricExporter metricExporter = OtlpGrpcMetricExporter.builder()
-            .setEndpoint(endpoint)
-            .addHeader("signoz-debug", "true")
-            .setTimeout(java.time.Duration.ofSeconds(30))
-            .build();
+        // Parse the header key and value
+        String headerKey = null;
+        String headerValue = accessToken;
+        if (accessToken != null && accessToken.contains("=")) {
+            String[] parts = accessToken.split("=", 2);
+            headerKey = parts[0];
+            headerValue = parts[1];
+        }
 
-        // Create metric reader with 1-second interval
+        // Create OTLP metric exporter
+        OtlpGrpcMetricExporter metricExporter;
+        if (headerKey != null && headerValue != null && !headerValue.isEmpty() && !endpoint.contains("localhost")) {
+            logger.info("Metrics header key: " + headerKey);
+            logger.info("Metrics endpoint: " + endpoint);
+            metricExporter = OtlpGrpcMetricExporter.builder()
+                .setEndpoint(endpoint)
+                .addHeader(headerKey, headerValue)
+                .setTimeout(java.time.Duration.ofSeconds(60))
+                .build();
+        } else {
+            metricExporter = OtlpGrpcMetricExporter.builder()
+                .setEndpoint(endpoint)
+                .setTimeout(java.time.Duration.ofSeconds(60))
+                .build();
+        }
+
+        // Create metric reader with optimized settings
         metricReader = PeriodicMetricReader.builder(metricExporter)
-            .setInterval(java.time.Duration.ofSeconds(1))
+            .setInterval(java.time.Duration.ofSeconds(5))  // Increased interval for better batching
             .build();
 
         // Create and return meter provider
