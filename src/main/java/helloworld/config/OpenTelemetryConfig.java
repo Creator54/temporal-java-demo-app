@@ -125,6 +125,10 @@ public final class OpenTelemetryConfig {
         return System.getenv().get(ENV_SIGNOZ_ACCESS_TOKEN);
     }
 
+    public static String getResourceAttributes() {
+        return System.getenv().get(ENV_RESOURCE_ATTRIBUTES);
+    }
+
     /**
      * Sets the global OpenTelemetry instance.
      * @throws IllegalStateException if called multiple times

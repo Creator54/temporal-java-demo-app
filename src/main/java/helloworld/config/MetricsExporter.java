@@ -71,7 +71,7 @@ public class MetricsExporter {
 
         // Create OTLP metric exporter
         OtlpGrpcMetricExporter metricExporter;
-        if (headerKey != null && headerValue != null && !headerValue.isEmpty() && !endpoint.contains("localhost")) {
+        if (headerKey != null && headerValue != null && !headerValue.isEmpty()) {
             logger.info("Metrics header key: " + headerKey);
             logger.info("Metrics endpoint: " + endpoint);
             metricExporter = OtlpGrpcMetricExporter.builder()

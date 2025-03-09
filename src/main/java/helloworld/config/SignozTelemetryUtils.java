@@ -69,6 +69,19 @@ public final class SignozTelemetryUtils {
             System.setProperty("otel.exporter.otlp.protocol", "grpc");
             System.setProperty("otel.exporter.otlp.endpoint", OpenTelemetryConfig.getEndpoint());
 
+            // Configure exporters
+            System.setProperty("otel.metrics.exporter", "otlp");
+            System.setProperty("otel.traces.exporter", "otlp");
+            System.setProperty("otel.logs.exporter", "none");
+
+            // Configure context propagation and sampling
+            System.setProperty("otel.propagators", "tracecontext,baggage");
+            System.setProperty("otel.traces.sampler", "always_on");
+
+            // Configure additional settings
+            System.setProperty("otel.resource.attributes", OpenTelemetryConfig.getResourceAttributes());
+            System.setProperty("otel.service.name", "temporal-hello-world");            
+
             // Build SDK with metrics and tracing support
             OpenTelemetrySdk sdk = OpenTelemetrySdk.builder()
                 .setTracerProvider(TracingExporter.createTracerProvider())

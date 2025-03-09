@@ -103,7 +103,8 @@ public class TracingExporter {
 
         // Create OTLP trace exporter
         OtlpGrpcSpanExporter spanExporter;
-        if (headerKey != null && headerValue != null && !headerValue.isEmpty() && !endpoint.contains("localhost")) {
+        if (headerKey != null && headerValue != null && !headerValue.isEmpty()) {
+            logger.info("Configuring trace exporter with auth header");
             logger.info("Tracing header key: " + headerKey);
             logger.info("Tracing endpoint: " + endpoint);
             spanExporter = OtlpGrpcSpanExporter.builder()
@@ -112,24 +113,29 @@ public class TracingExporter {
                 .setTimeout(java.time.Duration.ofSeconds(60))
                 .build();
         } else {
+            logger.info("Configuring trace exporter without auth header");
+            logger.info("Tracing endpoint: " + endpoint);
             spanExporter = OtlpGrpcSpanExporter.builder()
                 .setEndpoint(endpoint)
                 .setTimeout(java.time.Duration.ofSeconds(60))
                 .build();
         }
 
-        // Create BatchSpanProcessor with optimized settings
+        // Create BatchSpanProcessor with optimized settings and more frequent exports
         spanProcessor = BatchSpanProcessor.builder(spanExporter)
-            .setScheduleDelay(java.time.Duration.ofSeconds(1))
-            .setMaxQueueSize(4096)
+            .setScheduleDelay(java.time.Duration.ofMillis(100)) // More frequent exports
+            .setMaxQueueSize(2048)
             .setMaxExportBatchSize(512)
-            .setExporterTimeout(java.time.Duration.ofSeconds(60))
+            .setExporterTimeout(java.time.Duration.ofSeconds(30))
             .build();
 
-        // Create and return tracer provider
+        logger.info("Creating tracer provider with always-on sampling");
+
+        // Create and return tracer provider with explicit sampling configuration
         return SdkTracerProvider.builder()
             .addSpanProcessor(spanProcessor)
             .setResource(OpenTelemetryConfig.createResource())
+            .setSampler(io.opentelemetry.sdk.trace.samplers.Sampler.alwaysOn())
             .build();
     }
 
@@ -141,8 +147,9 @@ public class TracingExporter {
         if (spanProcessor != null) {
             try {
                 logger.info("Shutting down span processor...");
-                spanProcessor.forceFlush().join(10, TimeUnit.SECONDS);
-                spanProcessor.shutdown().join(10, TimeUnit.SECONDS);
+                // Force flush with longer timeout
+                spanProcessor.forceFlush().join(30, TimeUnit.SECONDS);
+                spanProcessor.shutdown().join(30, TimeUnit.SECONDS);
                 logger.info("Span processor shutdown completed");
             } catch (Exception e) {
                 logger.severe("Error during span processor shutdown: " + e.getMessage());
