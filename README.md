@@ -29,7 +29,7 @@ temporal server start-dev --ui-port 8080
 ```bash
 # Required for telemetry
 export OTEL_EXPORTER_OTLP_ENDPOINT="http://localhost:4317"
-export OTEL_SERVICE_NAME="temporal-hello-world"
+export OTEL_RESOURCE_ATTRIBUTES="service.name=temporal-hello-world,environment=development"
 ```
 
 4. **Run**:

@@ -82,8 +82,7 @@ export OTEL_EXPORTER_OTLP_ENDPOINT="http://localhost:4317"
 export OTEL_EXPORTER_OTLP_PROTOCOL="grpc"
 
 # Service Information
-export OTEL_SERVICE_NAME="temporal-hello-world"
-export OTEL_RESOURCE_ATTRIBUTES="service.name=${OTEL_SERVICE_NAME},environment=development"
+export OTEL_RESOURCE_ATTRIBUTES="service.name=temporal-hello-world,environment=development"
 ```
 
 ## Usage Examples

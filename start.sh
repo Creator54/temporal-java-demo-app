@@ -32,8 +32,7 @@ check_port() {
 
 # OpenTelemetry Configuration
 export OTEL_EXPORTER_OTLP_ENDPOINT="http://localhost:4317"
-export OTEL_SERVICE_NAME="temporal-hello-world"
-export OTEL_RESOURCE_ATTRIBUTES="service.name=${OTEL_SERVICE_NAME},environment=development"
+export OTEL_RESOURCE_ATTRIBUTES="service.name=temporal-hello-world,environment=development"
 export OTEL_METRICS_EXPORTER=otlp
 export OTEL_TRACES_EXPORTER=otlp
 export OTEL_LOGS_EXPORTER=none
