@@ -2,9 +2,17 @@ package helloworld.config;
 
 import io.temporal.client.WorkflowClient;
 import io.temporal.client.WorkflowClientOptions;
+import io.temporal.serviceclient.SimpleSslContextBuilder;
 import io.temporal.serviceclient.WorkflowServiceStubs;
 import io.temporal.serviceclient.WorkflowServiceStubsOptions;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import javax.net.ssl.SSLException;
+import io.grpc.netty.shaded.io.netty.handler.ssl.SslContext;
+import java.util.logging.Logger;
+import java.util.logging.Level;
 
 /**
  * Core configuration for Temporal client and service connections.
@@ -31,6 +39,8 @@ import java.io.File;
  * ```
  */
 public class TemporalConfig {
+    private static final Logger logger = Logger.getLogger(TemporalConfig.class.getName());
+    
     // Default configuration values
     private static final class Defaults {
         static final String TARGET = "localhost:7233";
@@ -40,11 +50,11 @@ public class TemporalConfig {
 
     // Environment variable names
     private static final class EnvVars {
-        static final String HOST = "TEMPORAL_HOST_ADDRESS";
+        static final String HOST_URL = "TEMPORAL_HOST_URL";
         static final String NAMESPACE = "TEMPORAL_NAMESPACE";
         static final String TASK_QUEUE = "TEMPORAL_TASK_QUEUE";
-        static final String CERT_PATH = "TEMPORAL_CERT_PATH";
-        static final String KEY_PATH = "TEMPORAL_KEY_PATH";
+        static final String TLS_CERT = "TEMPORAL_TLS_CERT";
+        static final String TLS_KEY = "TEMPORAL_TLS_KEY";
     }
 
     private static WorkflowServiceStubs service;
@@ -80,7 +90,9 @@ public class TemporalConfig {
      * @param clientOptions Custom client options
      * @return WorkflowClient instance
      */
-    public static WorkflowClient getWorkflowClient(WorkflowServiceStubsOptions stubOptions, WorkflowClientOptions clientOptions) {
+    public static WorkflowClient getWorkflowClient(
+            WorkflowServiceStubsOptions stubOptions,
+            WorkflowClientOptions clientOptions) {
         initializeWithOptions(stubOptions, clientOptions);
         return client;
     }
@@ -124,7 +136,6 @@ public class TemporalConfig {
             WorkflowServiceStubsOptions stubOptions,
             WorkflowClientOptions clientOptions) {
         try {
-            // Create a new builder with the provided options
             WorkflowServiceStubsOptions.Builder builder = WorkflowServiceStubsOptions.newBuilder()
                 .setMetricsScope(stubOptions.getMetricsScope())
                 .setEnableKeepAlive(stubOptions.getEnableKeepAlive())
@@ -132,10 +143,8 @@ public class TemporalConfig {
                 .setKeepAliveTimeout(stubOptions.getKeepAliveTimeout())
                 .setKeepAlivePermitWithoutStream(stubOptions.getKeepAlivePermitWithoutStream());
 
-            // Configure endpoint and TLS
             configureEndpoint(builder);
             
-            // Initialize services with the combined options
             service = WorkflowServiceStubs.newServiceStubs(builder.build());
             client = initializeWorkflowClient(clientOptions);
         } catch (Exception e) {
@@ -161,11 +170,23 @@ public class TemporalConfig {
      * @param options Service stub options builder to configure
      */
     private static void configureEndpoint(WorkflowServiceStubsOptions.Builder options) {
-        String targetEndpoint = System.getenv(EnvVars.HOST);
-        if (targetEndpoint != null) {
+        String targetEndpoint = System.getenv(EnvVars.HOST_URL);
+        String certPath = System.getenv(EnvVars.TLS_CERT);
+        String keyPath = System.getenv(EnvVars.TLS_KEY);
+
+        if (targetEndpoint != null && certPath != null && keyPath != null) {
+            // Cloud configuration
+            logger.info("Configuring for Temporal Cloud at: " + targetEndpoint);
             options.setTarget(targetEndpoint);
             configureTls(options);
+        } else if (targetEndpoint != null) {
+            // Cloud URL provided but missing certificates
+            logger.warning("Temporal Cloud URL provided but missing TLS certificates. Please set " + 
+                         EnvVars.TLS_CERT + " and " + EnvVars.TLS_KEY);
+            throw new RuntimeException("Missing TLS certificates for Temporal Cloud connection");
         } else {
+            // Local configuration
+            logger.info("Using local Temporal server at: " + Defaults.TARGET);
             options.setTarget(Defaults.TARGET);
         }
     }
@@ -177,18 +198,26 @@ public class TemporalConfig {
      * @param options Service stub options builder to configure
      */
     private static void configureTls(WorkflowServiceStubsOptions.Builder options) {
-        String certPath = System.getenv(EnvVars.CERT_PATH);
-        String keyPath = System.getenv(EnvVars.KEY_PATH);
+        String certPath = System.getenv(EnvVars.TLS_CERT);
+        String keyPath = System.getenv(EnvVars.TLS_KEY);
 
         if (certPath != null && keyPath != null) {
             try {
-                options.setSslContext(
-                    io.grpc.netty.shaded.io.netty.handler.ssl.SslContextBuilder.forClient()
-                        .keyManager(new File(certPath), new File(keyPath))
-                        .build()
-                );
-            } catch (Exception e) {
-                throw new RuntimeException("Failed to configure TLS", e);
+                // Use FileInputStream to read the certificate and key files
+                try (InputStream clientCertInputStream = new FileInputStream(certPath);
+                     InputStream clientKeyInputStream = new FileInputStream(keyPath)) {
+                    
+                    // Use SimpleSslContextBuilder.forPKCS8() as recommended for Temporal Cloud
+                    SslContext sslContext = SimpleSslContextBuilder
+                        .forPKCS8(clientCertInputStream, clientKeyInputStream)
+                        .build();
+                    
+                    options.setSslContext(sslContext);
+                    logger.info("TLS configuration successful");
+                }
+            } catch (IOException e) {
+                logger.log(Level.SEVERE, "Failed to read TLS certificate or key files", e);
+                throw new RuntimeException("Failed to read TLS certificate or key files", e);
             }
         }
     }
@@ -216,6 +245,7 @@ public class TemporalConfig {
             }
         }
 
+        logger.info("Initializing Temporal client with namespace: " + namespace);
         return WorkflowClient.newInstance(service, builder.build());
     }
 
