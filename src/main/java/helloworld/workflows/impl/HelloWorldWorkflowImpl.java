@@ -1,9 +1,6 @@
 package helloworld.workflows.impl;
 
-import helloworld.config.SignozTelemetryUtils;
 import helloworld.workflows.HelloWorldWorkflow;
-import io.opentelemetry.api.metrics.LongCounter;
-import io.opentelemetry.api.metrics.Meter;
 
 /**
  * Implementation of the Hello World workflow.
@@ -16,7 +13,6 @@ import io.opentelemetry.api.metrics.Meter;
  * - Workflow method implementation
  * - Input parameter handling
  * - String manipulation in workflows
- * - Metrics instrumentation
  * 
  * In a real application, this workflow could:
  * - Call activities to perform actual work
@@ -25,17 +21,6 @@ import io.opentelemetry.api.metrics.Meter;
  * - Process signals and queries
  */
 public class HelloWorldWorkflowImpl implements HelloWorldWorkflow {
-    private static final LongCounter greetingCounter;
-
-    static {
-        // Initialize metrics
-        Meter meter = SignozTelemetryUtils.getMeter();
-        greetingCounter = meter
-            .counterBuilder("workflow.greeting.count")
-            .setDescription("Number of greetings generated")
-            .build();
-    }
-
     /**
      * Creates a greeting message for the given name.
      * This implementation simply concatenates "Hello" with the name.
@@ -45,9 +30,6 @@ public class HelloWorldWorkflowImpl implements HelloWorldWorkflow {
      */
     @Override
     public String sayHello(String name) {
-        // Record metric
-        greetingCounter.add(1);
-        
         return "Hello " + name + "!";
     }
 } 

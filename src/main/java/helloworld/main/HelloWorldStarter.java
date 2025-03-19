@@ -19,6 +19,8 @@ import io.opentelemetry.context.Scope;
 import java.time.Duration;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import io.opentelemetry.api.metrics.LongCounter;
+import io.opentelemetry.api.metrics.Meter;
 
 /**
  * Application entry point for starting Hello World workflows.
@@ -43,6 +45,8 @@ import java.util.concurrent.TimeUnit;
 public class HelloWorldStarter {
     private final WorkflowServiceStubs workflowServiceStubs;
     private final WorkflowClient workflowClient;
+    private final LongCounter workflowCompletionCounter;
+    private final LongCounter workflowStartCounter;
 
     /**
      * Creates a new workflow starter with telemetry enabled.
@@ -54,6 +58,20 @@ public class HelloWorldStarter {
     public HelloWorldStarter() {
         // Initialize OpenTelemetry
         SignozTelemetryUtils.initializeTelemetry();
+
+        // Initialize metrics
+        Meter meter = SignozTelemetryUtils.getMeter();
+        workflowCompletionCounter = meter
+            .counterBuilder("workflow_completed_count")
+            .setDescription("Number of workflow executions completed")
+            .setUnit("1")
+            .build();
+            
+        workflowStartCounter = meter
+            .counterBuilder("workflow_started_count")
+            .setDescription("Number of workflow executions started")
+            .setUnit("1")
+            .build();
 
         // Configure service stubs with OpenTelemetry
         WorkflowServiceStubsOptions stubOptions = WorkflowServiceStubsOptions.newBuilder()
@@ -105,6 +123,10 @@ public class HelloWorldStarter {
                 options
             );
             
+            // Record workflow start
+            workflowStartCounter.add(1L);
+            parentSpan.setAttribute("workflow.started", true);
+            
             // Create span for workflow execution
             Span executeSpan = tracer.spanBuilder("ExecuteWorkflow")
                 .setParent(io.opentelemetry.context.Context.current().with(parentSpan))
@@ -119,6 +141,9 @@ public class HelloWorldStarter {
                 result = workflow.sayHello(name);
                 executeSpan.setAttribute("workflow.result", result);
                 executeSpan.setStatus(StatusCode.OK);
+                // Record workflow completion
+                workflowCompletionCounter.add(1L);
+                parentSpan.setAttribute("workflow.completed", true);
             } catch (Exception e) {
                 executeSpan.recordException(e);
                 executeSpan.setStatus(StatusCode.ERROR);
@@ -154,7 +179,7 @@ public class HelloWorldStarter {
                     workflowServiceStubs.awaitTermination(5, TimeUnit.SECONDS);
                 }
                 
-                // Give time for metrics to be exported
+                // Give time for final metrics to be exported
                 Thread.sleep(1000);
                 
                 // Force shutdown remaining threads
