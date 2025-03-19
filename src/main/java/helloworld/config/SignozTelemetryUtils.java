@@ -80,7 +80,7 @@ public final class SignozTelemetryUtils {
 
             // Configure additional settings
             System.setProperty("otel.resource.attributes", OpenTelemetryConfig.getResourceAttributes());
-            System.setProperty("otel.service.name", "temporal-hello-world");            
+            System.setProperty("otel.service.name", OpenTelemetryConfig.getServiceName());            
 
             // Build SDK with metrics and tracing support
             OpenTelemetrySdk sdk = OpenTelemetrySdk.builder()

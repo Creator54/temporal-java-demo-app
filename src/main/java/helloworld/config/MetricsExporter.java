@@ -88,7 +88,7 @@ public class MetricsExporter {
 
         // Create metric reader with optimized settings
         metricReader = PeriodicMetricReader.builder(metricExporter)
-            .setInterval(java.time.Duration.ofSeconds(5))  // Increased interval for better batching
+            .setInterval(java.time.Duration.ofSeconds(1))  // More frequent updates for better visibility
             .build();
 
         // Create and return meter provider

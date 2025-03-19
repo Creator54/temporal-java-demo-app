@@ -2,6 +2,8 @@ package helloworld.workers;
 
 import helloworld.config.TemporalConfig;
 import helloworld.config.SignozTelemetryUtils;
+import helloworld.config.TracingExporter;
+import helloworld.config.MetricsExporter;
 import helloworld.workflows.impl.HelloWorldWorkflowImpl;
 import io.temporal.worker.Worker;
 import io.temporal.worker.WorkerFactory;
@@ -134,6 +136,16 @@ public class HelloWorldWorker implements AutoCloseable {
             // Force shutdown service if still running
             System.out.println("Force shutting down service...");
             TemporalConfig.getService().shutdownNow();
+
+            // Ensure OpenTelemetry resources are properly shutdown
+            System.out.println("Shutting down OpenTelemetry...");
+            SignozTelemetryUtils.getMetricsScope().close();
+            TracingExporter.shutdown();
+            MetricsExporter.shutdown();
+
+            // Give time for final metrics to be exported
+            Thread.sleep(1000);
+            
             System.out.println("Worker shutdown completed");
         } catch (Exception e) {
             System.err.println("Error during shutdown: " + e.getMessage());

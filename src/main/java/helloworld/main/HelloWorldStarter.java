@@ -1,13 +1,16 @@
 package helloworld.main;
 
 import helloworld.config.TemporalConfig;
+import helloworld.config.OpenTelemetryConfig;
 import helloworld.config.SignozTelemetryUtils;
 import helloworld.config.TracingExporter;
+import helloworld.config.MetricsExporter;
 import helloworld.workflows.HelloWorldWorkflow;
 import io.temporal.client.WorkflowClient;
 import io.temporal.client.WorkflowClientOptions;
 import io.temporal.client.WorkflowOptions;
 import io.temporal.common.RetryOptions;
+import io.temporal.serviceclient.WorkflowServiceStubs;
 import io.temporal.serviceclient.WorkflowServiceStubsOptions;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.StatusCode;
@@ -15,6 +18,7 @@ import io.opentelemetry.api.trace.Tracer;
 import io.opentelemetry.context.Scope;
 import java.time.Duration;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Application entry point for starting Hello World workflows.
@@ -37,8 +41,8 @@ import java.util.UUID;
  * ```
  */
 public class HelloWorldStarter {
-    private final WorkflowClient client;
-    private final Tracer tracer;
+    private final WorkflowServiceStubs workflowServiceStubs;
+    private final WorkflowClient workflowClient;
 
     /**
      * Creates a new workflow starter with telemetry enabled.
@@ -50,7 +54,6 @@ public class HelloWorldStarter {
     public HelloWorldStarter() {
         // Initialize OpenTelemetry
         SignozTelemetryUtils.initializeTelemetry();
-        this.tracer = SignozTelemetryUtils.getTracer();
 
         // Configure service stubs with OpenTelemetry
         WorkflowServiceStubsOptions stubOptions = WorkflowServiceStubsOptions.newBuilder()
@@ -62,8 +65,9 @@ public class HelloWorldStarter {
             .setInterceptors(SignozTelemetryUtils.getClientInterceptor())
             .build();
 
-        // Create client with configured options
-        this.client = TemporalConfig.getWorkflowClient(stubOptions, clientOptions);
+        // Initialize Temporal client
+        this.workflowServiceStubs = TemporalConfig.getService();
+        this.workflowClient = TemporalConfig.getWorkflowClient(stubOptions, clientOptions);
     }
 
     /**
@@ -77,41 +81,36 @@ public class HelloWorldStarter {
      * @throws RuntimeException if workflow execution fails
      */
     public void runWorkflow(String name) {
-        // Create a parent span for the entire workflow start operation
+        Tracer tracer = SignozTelemetryUtils.getTracer();
+        
+        // Create parent span for workflow execution
         Span parentSpan = tracer.spanBuilder("StartWorkflow")
-            .setAttribute("workflow.name", "HelloWorldWorkflow")
-            .setAttribute("workflow.input", name)
-            .setAttribute("workflow.type", "temporal")
-            .setAttribute("service.name", "temporal-hello-world")
+            .setAttribute("workflow.type", "HelloWorld")
+            .setAttribute("workflow.name", name)
             .startSpan();
-
+        
         try (Scope scope = parentSpan.makeCurrent()) {
-            // Create workflow options with retry policy
-            String workflowId = "hello-world-" + UUID.randomUUID();
+            // Generate unique workflow ID
+            String workflowId = "hello-world-" + UUID.randomUUID().toString();
+            
+            // Configure workflow options
             WorkflowOptions options = WorkflowOptions.newBuilder()
                 .setTaskQueue(TemporalConfig.getTaskQueue())
                 .setWorkflowId(workflowId)
-                .setRetryOptions(RetryOptions.newBuilder()
-                    .setInitialInterval(Duration.ofSeconds(1))
-                    .setMaximumInterval(Duration.ofSeconds(10))
-                    .setBackoffCoefficient(2.0)
-                    .setMaximumAttempts(3)
-                    .build())
                 .build();
-
-            parentSpan.setAttribute("workflow.id", workflowId);
-            parentSpan.setAttribute("workflow.task_queue", TemporalConfig.getTaskQueue());
-            parentSpan.setAttribute("workflow.attempt", 1);
-
-            // Create and execute the workflow
-            HelloWorldWorkflow workflow = client.newWorkflowStub(HelloWorldWorkflow.class, options);
             
-            // Create a child span for the actual workflow execution
+            // Start workflow
+            HelloWorldWorkflow workflow = workflowClient.newWorkflowStub(
+                HelloWorldWorkflow.class,
+                options
+            );
+            
+            // Create span for workflow execution
             Span executeSpan = tracer.spanBuilder("ExecuteWorkflow")
                 .setParent(io.opentelemetry.context.Context.current().with(parentSpan))
                 .setAttribute("workflow.id", workflowId)
                 .setAttribute("workflow.type", "temporal")
-                .setAttribute("service.name", "temporal-hello-world")
+                .setAttribute("service.name", OpenTelemetryConfig.getServiceName())
                 .setAttribute("workflow.task_queue", TemporalConfig.getTaskQueue())
                 .startSpan();
             
@@ -142,8 +141,28 @@ public class HelloWorldStarter {
             throw new RuntimeException("Failed to execute workflow", e);
         } finally {
             parentSpan.end();
-            // Force flush to ensure spans are exported
-            TracingExporter.shutdown();
+            
+            // Graceful shutdown of all resources
+            try {
+                // Shutdown OpenTelemetry
+                TracingExporter.shutdown();
+                MetricsExporter.shutdown();
+                
+                // Shutdown Temporal client
+                if (workflowClient != null) {
+                    workflowServiceStubs.shutdown();
+                    workflowServiceStubs.awaitTermination(5, TimeUnit.SECONDS);
+                }
+                
+                // Give time for metrics to be exported
+                Thread.sleep(1000);
+                
+                // Force shutdown remaining threads
+                System.exit(0);
+            } catch (Exception e) {
+                System.err.println("Error during shutdown: " + e.getMessage());
+                System.exit(1);
+            }
         }
     }
 

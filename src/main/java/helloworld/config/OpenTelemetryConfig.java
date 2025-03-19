@@ -7,6 +7,8 @@ import io.opentelemetry.api.trace.propagation.W3CTraceContextPropagator;
 import io.opentelemetry.context.propagation.ContextPropagators;
 import io.opentelemetry.sdk.OpenTelemetrySdk;
 import io.opentelemetry.sdk.resources.Resource;
+import io.temporal.client.WorkflowClient;
+import io.temporal.serviceclient.WorkflowServiceStubs;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.HashMap;
@@ -45,6 +47,9 @@ public final class OpenTelemetryConfig {
 
     // Global SDK instance - initialized by SignozTelemetryUtils
     private static volatile OpenTelemetry openTelemetry;
+    private static WorkflowServiceStubs service;
+    private static WorkflowClient client;
+    private static volatile Resource resource;
 
     /**
      * Gets the global OpenTelemetry instance.
@@ -69,48 +74,58 @@ public final class OpenTelemetryConfig {
      * @throws IllegalStateException if service.name is not configured in OTEL_RESOURCE_ATTRIBUTES
      */
     public static Resource createResource() {
-        String environment = System.getenv().getOrDefault(ENV_ENVIRONMENT, "development");
-        
-        // Parse OTEL_RESOURCE_ATTRIBUTES
-        String resourceAttrs = System.getenv(ENV_RESOURCE_ATTRIBUTES);
-        Map<AttributeKey<String>, String> attributes = new HashMap<>();
-        
-        if (resourceAttrs != null) {
-            // Parse comma-separated key-value pairs
-            for (String pair : resourceAttrs.split(",")) {
-                String[] keyValue = pair.trim().split("=", 2);
-                if (keyValue.length == 2) {
-                    String key = keyValue[0].trim();
-                    String value = keyValue[1].trim();
-                    if ("service.name".equals(key)) {
-                        attributes.put(SERVICE_NAME, value);
+        if (resource != null) {
+            return resource;
+        }
+
+        synchronized (OpenTelemetryConfig.class) {
+            if (resource != null) {
+                return resource;
+            }
+
+            String environment = System.getenv().getOrDefault(ENV_ENVIRONMENT, "development");
+            
+            // Parse OTEL_RESOURCE_ATTRIBUTES
+            String resourceAttrs = System.getenv(ENV_RESOURCE_ATTRIBUTES);
+            Map<AttributeKey<String>, String> attributes = new HashMap<>();
+            
+            if (resourceAttrs != null) {
+                // Parse comma-separated key-value pairs
+                for (String pair : resourceAttrs.split(",")) {
+                    String[] keyValue = pair.trim().split("=", 2);
+                    if (keyValue.length == 2) {
+                        String key = keyValue[0].trim();
+                        String value = keyValue[1].trim();
+                        if ("service.name".equals(key)) {
+                            attributes.put(SERVICE_NAME, value);
+                        }
                     }
                 }
             }
-        }
 
-        // Verify service.name is set
-        if (!attributes.containsKey(SERVICE_NAME)) {
-            throw new IllegalStateException(
-                "service.name must be configured via OTEL_RESOURCE_ATTRIBUTES environment variable. " +
-                "Example: OTEL_RESOURCE_ATTRIBUTES=service.name=your-service-name"
+            // Verify service.name is set
+            if (!attributes.containsKey(SERVICE_NAME)) {
+                throw new IllegalStateException(
+                    "service.name must be configured via OTEL_RESOURCE_ATTRIBUTES environment variable. " +
+                    "Example: OTEL_RESOURCE_ATTRIBUTES=service.name=your-service-name"
+                );
+            }
+
+            // Create resource with attributes
+            resource = Resource.create(
+                Attributes.of(
+                    SERVICE_NAME, attributes.get(SERVICE_NAME),
+                    SERVICE_NAMESPACE, "default",
+                    DEPLOYMENT_ENVIRONMENT, environment
+                )
             );
+            
+            logger.info("Creating resource with service.name: " + attributes.get(SERVICE_NAME));
+            logger.info("Environment: " + environment);
+            logger.info("Resource attributes: " + resourceAttrs);
+            
+            return Resource.getDefault().merge(resource);
         }
-
-        // Create resource with attributes
-        Resource resource = Resource.create(
-            Attributes.of(
-                SERVICE_NAME, attributes.get(SERVICE_NAME),
-                SERVICE_NAMESPACE, "default",
-                DEPLOYMENT_ENVIRONMENT, environment
-            )
-        );
-        
-        logger.info("Creating resource with service.name: " + attributes.get(SERVICE_NAME));
-        logger.info("Environment: " + environment);
-        logger.info("Resource attributes: " + resourceAttrs);
-        
-        return Resource.getDefault().merge(resource);
     }
 
     /**
@@ -127,6 +142,17 @@ public final class OpenTelemetryConfig {
 
     public static String getResourceAttributes() {
         return System.getenv().get(ENV_RESOURCE_ATTRIBUTES);
+    }
+
+    public static String getServiceName() {
+        String resourceAttrs[] = System.getenv(ENV_RESOURCE_ATTRIBUTES).split(",");
+        for (String pair : resourceAttrs) {
+            String[] keyValue = pair.trim().split("=", 2);
+            if ("service.name".equals(keyValue[0].trim())) {
+                return keyValue[1].trim();
+            }
+        }
+        return "temporal-hello-world";
     }
 
     /**

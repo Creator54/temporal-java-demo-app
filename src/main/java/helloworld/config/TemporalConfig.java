@@ -264,7 +264,7 @@ public class TemporalConfig {
     /**
      * Gets the task queue name from environment or default.
      * 
-     * @return Task queue name to use
+     * @return Task queue name to use for workflows
      */
     public static String getTaskQueue() {
         return getEnvOrDefault(EnvVars.TASK_QUEUE, Defaults.TASK_QUEUE);

@@ -33,11 +33,8 @@ check_port() {
 # OpenTelemetry Configuration
 export OTEL_EXPORTER_OTLP_ENDPOINT="http://localhost:4317"
 export OTEL_RESOURCE_ATTRIBUTES="service.name=temporal-hello-world,environment=development"
-export OTEL_METRICS_EXPORTER=otlp
-export OTEL_TRACES_EXPORTER=otlp
-export OTEL_LOGS_EXPORTER=none
-export OTEL_EXPORTER_OTLP_PROTOCOL=grpc
-export OTEL_EXPORTER_OTLP_HEADERS="signoz-access-token=1234567890"
+export OTEL_JAVA_GLOBAL_AUTOCONFIGURE_ENABLED=true
+
 echo "Starting application..."
 
 # Check Temporal Server
@@ -62,26 +59,10 @@ sleep 2
 echo "Building application..."
 mvn clean package -q
 
-# Start the worker
+# Start the worker and keep it running
 echo "Starting worker..."
+echo "Press Ctrl+C to stop the worker"
 mvn exec:java \
     -Dexec.mainClass="helloworld.workers.HelloWorldWorker" \
     -Dorg.slf4j.simpleLogger.defaultLogLevel=info \
-    -q &
-WORKER_PID=$!
-
-# Wait for worker to initialize
-echo "Waiting for worker to initialize..."
-sleep 5
-
-# Start the workflow
-echo "Starting workflow..."
-mvn exec:java \
-    -Dexec.mainClass="helloworld.main.HelloWorldStarter" \
-    -Dorg.slf4j.simpleLogger.defaultLogLevel=info \
-    -q
-
-echo "Workflow completed."
-
-# Cleanup at the end
-cleanup
+    -Dotel.java.global-autoconfigure.enabled=true
