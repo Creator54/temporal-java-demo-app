@@ -2,6 +2,8 @@ package helloworld.workers;
 
 import helloworld.config.TemporalConfig;
 import helloworld.config.SignozTelemetryUtils;
+import helloworld.config.TracingExporter;
+import helloworld.config.MetricsExporter;
 import helloworld.workflows.impl.HelloWorldWorkflowImpl;
 import io.temporal.worker.Worker;
 import io.temporal.worker.WorkerFactory;
@@ -83,6 +85,9 @@ public class HelloWorldWorker implements AutoCloseable {
             System.out.println("Worker started for task queue: " + TemporalConfig.getTaskQueue());
             System.out.println("Metrics and traces are being exported to SigNoz");
             
+            // Register dashboard-specific metrics for visualization
+            TemporalConfig.registerDashboardMetrics();
+            
             // Add shutdown hook
             Runtime.getRuntime().addShutdownHook(new Thread(() -> {
                 if (!isShuttingDown) {
@@ -134,6 +139,22 @@ public class HelloWorldWorker implements AutoCloseable {
             // Force shutdown service if still running
             System.out.println("Force shutting down service...");
             TemporalConfig.getService().shutdownNow();
+
+            // Clean up workflow metrics resources first
+            System.out.println("Cleaning up workflow metrics...");
+            helloworld.config.WorkflowMetricsUtil.cleanup();
+            
+            // Ensure OpenTelemetry resources are properly shutdown
+            System.out.println("Shutting down OpenTelemetry...");
+            SignozTelemetryUtils.getMetricsScope().close();
+            
+            // Give time for final metrics to be exported
+            Thread.sleep(1000);
+            
+            // Then shutdown exporters
+            TracingExporter.shutdown();
+            MetricsExporter.shutdown();
+            
             System.out.println("Worker shutdown completed");
         } catch (Exception e) {
             System.err.println("Error during shutdown: " + e.getMessage());
@@ -141,6 +162,7 @@ public class HelloWorldWorker implements AutoCloseable {
             try {
                 factory.shutdownNow();
                 TemporalConfig.getService().shutdownNow();
+                helloworld.config.WorkflowMetricsUtil.cleanup();
             } catch (Exception ignored) {
                 // Ignore any errors during force shutdown
             }

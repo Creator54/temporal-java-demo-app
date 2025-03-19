@@ -1,184 +1,132 @@
 package helloworld.config;
 
+import com.uber.m3.tally.Scope;
 import io.opentelemetry.api.OpenTelemetry;
 import io.opentelemetry.api.metrics.Meter;
 import io.opentelemetry.api.trace.Tracer;
-import io.opentelemetry.api.trace.propagation.W3CTraceContextPropagator;
 import io.opentelemetry.context.propagation.ContextPropagators;
+import io.opentelemetry.api.trace.propagation.W3CTraceContextPropagator;
 import io.opentelemetry.sdk.OpenTelemetrySdk;
+import io.opentelemetry.sdk.resources.Resource;
 import io.temporal.common.interceptors.WorkerInterceptor;
-import io.temporal.common.interceptors.WorkflowClientInterceptor;
-import com.uber.m3.tally.Scope;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * Main entry point for Temporal telemetry integration with OpenTelemetry.
- * 
- * This class provides:
- * 1. One-line initialization of metrics and tracing
- * 2. Access to configured telemetry components
- * 3. Integration with Temporal's worker and client interceptors
- * 
- * IMPORTANT: Call initializeTelemetry() before creating any Temporal clients or workers.
- * Initialize in both worker and workflow starter processes.
- * 
- * Typical usage:
- * ```java
- * // Initialize telemetry FIRST
- * SignozTelemetryUtils.initializeTelemetry();
- * 
- * // Then configure Temporal client
- * WorkflowClient client = TemporalConfig.getWorkflowClient(
- *     WorkflowServiceStubsOptions.newBuilder()
- *         .setMetricsScope(SignozTelemetryUtils.getMetricsScope())
- *         .build(),
- *     WorkflowClientOptions.newBuilder()
- *         .setInterceptors(SignozTelemetryUtils.getClientInterceptor())
- *         .build()
- * );
- * ```
+ * Utility class for configuring and accessing SigNoz telemetry in temporal applications.
+ * Provides centralized access to meters, tracers, and other telemetry components.
  */
-public final class SignozTelemetryUtils {
+public class SignozTelemetryUtils {
     private static final Logger logger = Logger.getLogger(SignozTelemetryUtils.class.getName());
-    private static volatile boolean isInitialized = false;
-    private static volatile Tracer tracer;
-    private static volatile Meter meter;
-
+    private static volatile boolean initialized = false;
+    private static Meter meter;
+    private static Tracer tracer;
+    
     /**
-     * Initializes OpenTelemetry for both metrics and tracing.
-     * 
-     * This method:
-     * 1. Configures the OpenTelemetry SDK
-     * 2. Sets up metrics export via OTLP
-     * 3. Sets up tracing with OpenTracing compatibility
-     * 4. Registers a shutdown hook for cleanup
-     * 
-     * Thread-safe and idempotent - safe to call multiple times.
+     * Initializes OpenTelemetry for the application.
+     * Sets up tracing, metrics and initializes dashboard-specific metrics.
      */
     public static synchronized void initializeTelemetry() {
-        if (isInitialized) {
-            logger.info("OpenTelemetry already initialized");
+        if (initialized) {
             return;
         }
-
+        
+        logger.info("Initializing OpenTelemetry...");
+        
         try {
-            logger.info("Configuring OpenTelemetry with endpoint: " + OpenTelemetryConfig.getEndpoint());
-
-            // Configure OTLP protocol and endpoint
-            System.setProperty("otel.exporter.otlp.protocol", "grpc");
-            System.setProperty("otel.exporter.otlp.endpoint", OpenTelemetryConfig.getEndpoint());
-
-            // Configure exporters
-            System.setProperty("otel.metrics.exporter", "otlp");
-            System.setProperty("otel.traces.exporter", "otlp");
-            System.setProperty("otel.logs.exporter", "none");
-
-            // Configure context propagation and sampling
-            System.setProperty("otel.propagators", "tracecontext,baggage");
-            System.setProperty("otel.traces.sampler", "always_on");
-
-            // Configure additional settings
-            System.setProperty("otel.resource.attributes", OpenTelemetryConfig.getResourceAttributes());
-            System.setProperty("otel.service.name", "temporal-hello-world");            
-
+            // Create resource with service info
+            Resource resource = OpenTelemetryConfig.createResource();
+            
             // Build SDK with metrics and tracing support
             OpenTelemetrySdk sdk = OpenTelemetrySdk.builder()
                 .setTracerProvider(TracingExporter.createTracerProvider())
                 .setMeterProvider(MetricsExporter.createMeterProvider())
                 .setPropagators(ContextPropagators.create(W3CTraceContextPropagator.getInstance()))
                 .build();
-
+            
             OpenTelemetryConfig.setOpenTelemetry(sdk);
-            isInitialized = true;
-
-            // Ensure clean shutdown
+            
+            // Initialize meters and tracers
+            meter = sdk.getMeter("io.temporal");
+            tracer = sdk.getTracer("io.temporal");
+            
+            // Initialize workflow metrics for the dashboard
+            WorkflowMetricsUtil.initializeMetrics();
+            
+            // Add shutdown hook for clean telemetry shutdown
             Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                logger.info("Shutting down OpenTelemetry...");
+                
+                // First, clean up WorkflowMetricsUtil resources
+                WorkflowMetricsUtil.cleanup();
+                
+                // Force metrics export before shutdown
                 try {
-                    logger.info("Starting OpenTelemetry shutdown...");
-                    TracingExporter.shutdown();
-                    MetricsExporter.shutdown();
-                    logger.info("OpenTelemetry shutdown completed");
-                } catch (Exception e) {
-                    logger.log(Level.SEVERE, "Error during OpenTelemetry shutdown", e);
+                    // Allow time for any pending metrics to be exported
+                    Thread.sleep(500);
+                } catch (InterruptedException e) {
+                    logger.log(Level.WARNING, "Interrupted during shutdown delay", e);
                 }
+                
+                // Shutdown exporters
+                TracingExporter.shutdown();
+                MetricsExporter.shutdown();
+                
+                // Reset local references
+                meter = null;
+                tracer = null;
+                initialized = false;
             }));
-
-            logger.info("OpenTelemetry initialized successfully");
+            
+            initialized = true;
+            logger.info("OpenTelemetry initialization complete");
         } catch (Exception e) {
-            logger.log(Level.SEVERE, "Error configuring OpenTelemetry", e);
-            throw new RuntimeException("Failed to configure OpenTelemetry", e);
+            logger.log(Level.SEVERE, "Error initializing OpenTelemetry", e);
         }
     }
-
+    
     /**
-     * Gets the OpenTelemetry instance for custom instrumentation.
-     * Rarely needed - prefer getTracer() or getMeter().
+     * Gets the OpenTelemetry meter for recording metrics.
+     * 
+     * @return Configured OpenTelemetry Meter instance
      */
-    public static OpenTelemetry getOpenTelemetry() {
-        ensureInitialized();
-        return OpenTelemetryConfig.getOpenTelemetry();
-    }
-
-    /**
-     * Gets a Tracer for creating custom spans.
-     * Thread-safe, caches the Tracer instance.
-     */
-    public static synchronized Tracer getTracer() {
-        if (tracer == null) {
-            tracer = getOpenTelemetry().getTracer(SignozTelemetryUtils.class.getName());
-        }
-        return tracer;
-    }
-
-    /**
-     * Gets a Meter for creating custom metrics.
-     * Thread-safe, caches the Meter instance.
-     */
-    public static synchronized Meter getMeter() {
-        if (meter == null) {
-            meter = getOpenTelemetry().getMeter(SignozTelemetryUtils.class.getName());
+    public static Meter getMeter() {
+        if (!initialized) {
+            logger.warning("OpenTelemetry not initialized. Call initializeTelemetry() first.");
         }
         return meter;
     }
-
+    
+    /**
+     * Gets the OpenTelemetry tracer for creating spans.
+     * 
+     * @return Configured OpenTelemetry Tracer instance
+     */
+    public static Tracer getTracer() {
+        if (!initialized) {
+            logger.warning("OpenTelemetry not initialized. Call initializeTelemetry() first.");
+        }
+        return tracer;
+    }
+    
     /**
      * Gets the metrics scope for Temporal client configuration.
-     * Used with WorkflowServiceStubsOptions.setMetricsScope().
+     * 
+     * @return Metrics scope for Temporal client
      */
     public static Scope getMetricsScope() {
-        ensureInitialized();
         return MetricsExporter.getMetricsScope();
     }
-
+    
     /**
-     * Gets the worker interceptor for Temporal worker configuration.
-     * Used with WorkerFactoryOptions.setWorkerInterceptors().
+     * Gets the worker interceptor for tracing.
+     * 
+     * @return WorkerInterceptor instance with tracing capability
      */
     public static WorkerInterceptor getWorkerInterceptor() {
-        ensureInitialized();
         return TracingExporter.getWorkerInterceptor();
     }
-
-    /**
-     * Gets the client interceptor for Temporal client configuration.
-     * Used with WorkflowClientOptions.setInterceptors().
-     */
-    public static WorkflowClientInterceptor getClientInterceptor() {
-        ensureInitialized();
-        return TracingExporter.getClientInterceptor();
-    }
-
-    /**
-     * Ensures telemetry is initialized before accessing components.
-     * @throws IllegalStateException if initializeTelemetry() wasn't called
-     */
-    private static void ensureInitialized() {
-        if (!isInitialized) {
-            throw new IllegalStateException("OpenTelemetry not initialized. Call initializeTelemetry() first.");
-        }
-    }
-
+    
     private SignozTelemetryUtils() {
         // Prevent instantiation - use static methods
     }

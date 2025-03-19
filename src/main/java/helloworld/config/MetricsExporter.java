@@ -3,6 +3,8 @@ package helloworld.config;
 import io.opentelemetry.exporter.otlp.metrics.OtlpGrpcMetricExporter;
 import io.opentelemetry.sdk.metrics.SdkMeterProvider;
 import io.opentelemetry.sdk.metrics.export.PeriodicMetricReader;
+import io.opentelemetry.sdk.metrics.InstrumentSelector;
+import io.opentelemetry.sdk.metrics.View;
 import com.uber.m3.tally.NoopScope;
 import com.uber.m3.tally.Scope;
 import java.util.logging.Logger;
@@ -88,13 +90,36 @@ public class MetricsExporter {
 
         // Create metric reader with optimized settings
         metricReader = PeriodicMetricReader.builder(metricExporter)
-            .setInterval(java.time.Duration.ofSeconds(5))  // Increased interval for better batching
+            .setInterval(java.time.Duration.ofSeconds(1))  // More frequent updates for better visibility
             .build();
 
-        // Create and return meter provider
+        // Create views for workflow metrics
+        View workflowStartedView = View.builder()
+            .setName("workflow_started_count_total")
+            .setDescription("Total number of workflow executions started")
+            .setAggregation(io.opentelemetry.sdk.metrics.Aggregation.sum())
+            .build();
+
+        View workflowCompletedView = View.builder()
+            .setName("workflow_completed_count_total")
+            .setDescription("Total number of workflow executions completed")
+            .setAggregation(io.opentelemetry.sdk.metrics.Aggregation.sum())
+            .build();
+
+        // Create and return meter provider with views
         return SdkMeterProvider.builder()
             .setResource(OpenTelemetryConfig.createResource())
             .registerMetricReader(metricReader)
+            .registerView(
+                InstrumentSelector.builder()
+                    .setName("workflow_started_count_total")
+                    .build(),
+                workflowStartedView)
+            .registerView(
+                InstrumentSelector.builder()
+                    .setName("workflow_completed_count_total")
+                    .build(),
+                workflowCompletedView)
             .build();
     }
 
@@ -106,10 +131,27 @@ public class MetricsExporter {
         if (metricReader != null) {
             try {
                 logger.info("Shutting down metrics reader...");
-                metricReader.shutdown().join(10, TimeUnit.SECONDS);
-                logger.info("Metrics reader shutdown completed");
+                
+                // First flush any pending metrics
+                try {
+                    metricReader.forceFlush().join(10, TimeUnit.SECONDS);
+                    logger.info("Metrics flush completed");
+                } catch (Exception e) {
+                    logger.warning("Metrics flush failed: " + e.getMessage());
+                }
+                
+                // Then shutdown the reader
+                try {
+                    metricReader.shutdown().join(10, TimeUnit.SECONDS);
+                    logger.info("Metrics reader shutdown completed successfully");
+                } catch (Exception e) {
+                    logger.warning("Metrics reader shutdown failed: " + e.getMessage());
+                }
             } catch (Exception e) {
                 logger.severe("Error during metrics reader shutdown: " + e.getMessage());
+            } finally {
+                metricReader = null;
+                metricsScope = null;
             }
         }
     }
