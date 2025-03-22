@@ -131,10 +131,27 @@ public class MetricsExporter {
         if (metricReader != null) {
             try {
                 logger.info("Shutting down metrics reader...");
-                metricReader.shutdown().join(10, TimeUnit.SECONDS);
-                logger.info("Metrics reader shutdown completed");
+                
+                // First flush any pending metrics
+                try {
+                    metricReader.forceFlush().join(10, TimeUnit.SECONDS);
+                    logger.info("Metrics flush completed");
+                } catch (Exception e) {
+                    logger.warning("Metrics flush failed: " + e.getMessage());
+                }
+                
+                // Then shutdown the reader
+                try {
+                    metricReader.shutdown().join(10, TimeUnit.SECONDS);
+                    logger.info("Metrics reader shutdown completed successfully");
+                } catch (Exception e) {
+                    logger.warning("Metrics reader shutdown failed: " + e.getMessage());
+                }
             } catch (Exception e) {
                 logger.severe("Error during metrics reader shutdown: " + e.getMessage());
+            } finally {
+                metricReader = null;
+                metricsScope = null;
             }
         }
     }

@@ -56,12 +56,15 @@ sleep 2
 
 # Build and run
 echo "Building application..."
-mvn clean package -q
+mvn clean package
+mvn dependency:copy-dependencies -DoutputDirectory=target/dependency
 
 # Start the worker and keep it running
 echo "Starting worker..."
 echo "Press Ctrl+C to stop the worker"
-mvn exec:java \
-    -Dexec.mainClass="helloworld.workers.HelloWorldWorker" \
+
+# Run using the jar file directly
+java -cp target/hello-world-1.0.0.jar:target/classes:target/dependency/* \
     -Dorg.slf4j.simpleLogger.defaultLogLevel=info \
-    -Dotel.java.global-autoconfigure.enabled=true
+    -Dotel.java.global-autoconfigure.enabled=true \
+    helloworld.workers.HelloWorldWorker

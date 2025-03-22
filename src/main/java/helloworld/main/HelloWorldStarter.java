@@ -80,7 +80,6 @@ public class HelloWorldStarter {
 
         // Configure client with OpenTelemetry interceptor
         WorkflowClientOptions clientOptions = WorkflowClientOptions.newBuilder()
-            .setInterceptors(SignozTelemetryUtils.getClientInterceptor())
             .build();
 
         // Initialize Temporal client
@@ -144,9 +143,26 @@ public class HelloWorldStarter {
                 // Record workflow completion
                 workflowCompletionCounter.add(1L);
                 parentSpan.setAttribute("workflow.completed", true);
+                
+                // Record workflow success metric to show in dashboard
+                helloworld.config.WorkflowMetricsUtil.recordSuccess(
+                    "HelloWorldWorkflow", 
+                    workflowId, 
+                    "run-" + UUID.randomUUID().toString(), // Generate a run ID since we can't easily get it
+                    TemporalConfig.getNamespace()
+                );
             } catch (Exception e) {
                 executeSpan.recordException(e);
                 executeSpan.setStatus(StatusCode.ERROR);
+                
+                // Record workflow failure metric
+                helloworld.config.WorkflowMetricsUtil.recordFailure(
+                    "HelloWorldWorkflow", 
+                    workflowId, 
+                    "run-" + UUID.randomUUID().toString(), // Generate a run ID since we can't easily get it
+                    TemporalConfig.getNamespace()
+                );
+                
                 throw e;
             } finally {
                 executeSpan.end();
