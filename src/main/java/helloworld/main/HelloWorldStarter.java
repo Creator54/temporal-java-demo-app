@@ -62,14 +62,14 @@ public class HelloWorldStarter {
         // Initialize metrics
         Meter meter = SignozTelemetryUtils.getMeter();
         workflowCompletionCounter = meter
-            .counterBuilder("workflow_completed_count")
-            .setDescription("Number of workflow executions completed")
+            .counterBuilder("workflow_completed_count_total")
+            .setDescription("Total number of workflow executions completed")
             .setUnit("1")
             .build();
             
         workflowStartCounter = meter
-            .counterBuilder("workflow_started_count")
-            .setDescription("Number of workflow executions started")
+            .counterBuilder("workflow_started_count_total")
+            .setDescription("Total number of workflow executions started")
             .setUnit("1")
             .build();
 

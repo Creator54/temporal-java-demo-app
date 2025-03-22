@@ -2,8 +2,7 @@
 
 # OpenTelemetry Configuration
 export OTEL_EXPORTER_OTLP_ENDPOINT="http://localhost:4317"
-export OTEL_RESOURCE_ATTRIBUTES="service.name=temporal-hello-world,environment=development"
-export OTEL_JAVA_GLOBAL_AUTOCONFIGURE_ENABLED=true
+export OTEL_RESOURCE_ATTRIBUTES="service.name=temporal-hello-world"
 
 echo "Starting workflow..."
 mvn exec:java \

@@ -3,6 +3,8 @@ package helloworld.config;
 import io.opentelemetry.exporter.otlp.metrics.OtlpGrpcMetricExporter;
 import io.opentelemetry.sdk.metrics.SdkMeterProvider;
 import io.opentelemetry.sdk.metrics.export.PeriodicMetricReader;
+import io.opentelemetry.sdk.metrics.InstrumentSelector;
+import io.opentelemetry.sdk.metrics.View;
 import com.uber.m3.tally.NoopScope;
 import com.uber.m3.tally.Scope;
 import java.util.logging.Logger;
@@ -91,10 +93,33 @@ public class MetricsExporter {
             .setInterval(java.time.Duration.ofSeconds(1))  // More frequent updates for better visibility
             .build();
 
-        // Create and return meter provider
+        // Create views for workflow metrics
+        View workflowStartedView = View.builder()
+            .setName("workflow_started_count_total")
+            .setDescription("Total number of workflow executions started")
+            .setAggregation(io.opentelemetry.sdk.metrics.Aggregation.sum())
+            .build();
+
+        View workflowCompletedView = View.builder()
+            .setName("workflow_completed_count_total")
+            .setDescription("Total number of workflow executions completed")
+            .setAggregation(io.opentelemetry.sdk.metrics.Aggregation.sum())
+            .build();
+
+        // Create and return meter provider with views
         return SdkMeterProvider.builder()
             .setResource(OpenTelemetryConfig.createResource())
             .registerMetricReader(metricReader)
+            .registerView(
+                InstrumentSelector.builder()
+                    .setName("workflow_started_count_total")
+                    .build(),
+                workflowStartedView)
+            .registerView(
+                InstrumentSelector.builder()
+                    .setName("workflow_completed_count_total")
+                    .build(),
+                workflowCompletedView)
             .build();
     }
 
