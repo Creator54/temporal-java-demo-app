@@ -133,7 +133,14 @@ public final class OpenTelemetryConfig {
      * Default: http://localhost:4317 (SigNoz default)
      */
     public static String getEndpoint() {
-        return System.getenv().getOrDefault(ENV_OTEL_ENDPOINT, DEFAULT_SIGNOZ_ENDPOINT);
+        String endpoint = System.getenv().getOrDefault(ENV_OTEL_ENDPOINT, DEFAULT_SIGNOZ_ENDPOINT);
+        
+        // Ensure the endpoint starts with a protocol
+        if (!endpoint.startsWith("http://") && !endpoint.startsWith("https://")) {
+            endpoint = "http://" + endpoint;
+        }
+        
+        return endpoint;
     }
 
     public static String getAccessToken() {

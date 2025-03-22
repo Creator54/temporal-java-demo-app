@@ -80,6 +80,7 @@ public class HelloWorldStarter {
 
         // Configure client with OpenTelemetry interceptor
         WorkflowClientOptions clientOptions = WorkflowClientOptions.newBuilder()
+            .setInterceptors(TracingExporter.getClientInterceptor())
             .build();
 
         // Initialize Temporal client
